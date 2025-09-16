@@ -1,5 +1,6 @@
 streamlit
 langchain
+langchain_openai
 langgraph
 langsmith
 python-dotenv
@@ -11,3 +12,5 @@ transformers
 torch
 numpy
 scikit-learn
+faiss-cpu==1.7.4
+
