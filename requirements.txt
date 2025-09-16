@@ -1,28 +1,13 @@
-langgraph
-
+streamlit
 langchain
-
+langgraph
 langsmith
 python-dotenv
-langchain-groq 
-langchain_tavily
-
-
-
-
-
-
-
-fitz  # PyMuPDF
- langchain_core.documents 
- transformers 
- PIL 
- numpy 
- langchain.prompts 
- langchain.schema.messages 
-sklearn.metrics.pairwise 
- os
- base64
- io
- langchain.text_splitter 
- langchain_community.vectorstores 
+chromadb
+pypdf
+PyMuPDF
+Pillow
+transformers
+torch
+numpy
+scikit-learn
