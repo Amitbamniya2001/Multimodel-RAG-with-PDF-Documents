@@ -11,8 +11,10 @@ import os
 import base64
 import io
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
+
+from langchain_community.vectorstores import Chroma
+from langchain.embeddings.base import Embeddings
 
 # --- 1. SET UP THE ENVIRONMENT & MODELS (RUNS ONCE) ---
 
@@ -33,13 +35,12 @@ def load_models():
     # Load the LLM using GitHub's endpoint
     token = os.getenv("GITHUB_TOKEN_CHATGPT")
     if not token:
-        st.error("GitHub token not found! Please create a .env file with your GITHUB_TOKEN_CHATGPT.")
+        st.error("GitHub token not found! Please set it in secrets or .env.")
         st.stop()
         
     endpoint = "https://models.github.ai/inference"
     llm = ChatOpenAI(
-        # model="Cohere-Command-A", # Correct model for vision
-        model = "gpt-4.1-nano",
+        model="gpt-4.1-nano",
         openai_api_key=token,
         openai_api_base=endpoint,
         model_kwargs={"max_tokens": 1024}
@@ -48,8 +49,7 @@ def load_models():
 
 clip_model, clip_processor, llm = load_models()
 
-
-# --- 2. EMBEDDING AND PROCESSING FUNCTIONS (FROM YOUR NOTEBOOK) ---
+# --- 2. EMBEDDING FUNCTIONS ---
 
 def embed_image(image_data):
     """Embed image using CLIP."""
@@ -70,7 +70,19 @@ def embed_text(text):
         features /= features.norm(dim=-1, keepdim=True)
         return features.squeeze().numpy()
 
-@st.cache_data(show_spinner="Processing PDF... This may take a moment.")
+# Wrap CLIP into a LangChain-compatible embedding class
+class ClipEmbeddings(Embeddings):
+    def embed_documents(self, texts):
+        return [embed_text(t) for t in texts]
+
+    def embed_query(self, text):
+        return embed_text(text)
+
+clip_embeddings = ClipEmbeddings()
+
+# --- 3. PDF PROCESSING ---
+
+@st.cache_resource(show_spinner="Processing PDF... This may take a moment.")
 def process_pdf(uploaded_file):
     """Process the uploaded PDF to extract text and images, and create embeddings."""
     if uploaded_file is None:
@@ -79,7 +91,7 @@ def process_pdf(uploaded_file):
     file_bytes = uploaded_file.read()
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     
-    all_docs, all_embeddings, image_data_store = [], [], {}
+    all_docs, image_data_store = [], {}
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
 
     for i, page in enumerate(doc):
@@ -89,7 +101,6 @@ def process_pdf(uploaded_file):
             temp_doc = Document(page_content=text, metadata={"page": i, "type": "text"})
             text_chunks = splitter.split_documents([temp_doc])
             for chunk in text_chunks:
-                all_embeddings.append(embed_text(chunk.page_content))
                 all_docs.append(chunk)
 
         # Process images
@@ -107,8 +118,6 @@ def process_pdf(uploaded_file):
                 img_base64 = base64.b64encode(buffered.getvalue()).decode()
                 image_data_store[image_id] = img_base64
                 
-                all_embeddings.append(embed_image(pil_image))
-                
                 image_doc = Document(
                     page_content=f"[Image: {image_id}]",
                     metadata={"page": i, "type": "image", "image_id": image_id}
@@ -119,22 +128,24 @@ def process_pdf(uploaded_file):
                 continue
     doc.close()
 
-    if not all_embeddings:
+    if not all_docs:
         return None, None
         
-    embeddings_array = np.array(all_embeddings, dtype=np.float32)
-    vector_store = FAISS.from_embeddings(
-        text_embeddings=list(zip([d.page_content for d in all_docs], all_embeddings)),
-        embedding=None,
-        metadatas=[d.metadata for d in all_docs]
+    # Build Chroma vector store
+    texts = [d.page_content for d in all_docs]
+    metadatas = [d.metadata for d in all_docs]
+
+    vector_store = Chroma.from_texts(
+        texts=texts,
+        embedding=clip_embeddings,
+        metadatas=metadatas
     )
     return vector_store, image_data_store
 
-# --- 3. RAG PIPELINE FUNCTIONS ---
+# --- 4. RAG PIPELINE FUNCTIONS ---
 
 def retrieve_multimodal(query, vector_store, k=5):
-    query_embedding = embed_text(query)
-    results = vector_store.similarity_search_by_vector(embedding=query_embedding, k=k)
+    results = vector_store.similarity_search(query, k=k)
     return results
 
 def create_multimodal_message(query, retrieved_docs, image_data_store):
@@ -157,7 +168,7 @@ def create_multimodal_message(query, retrieved_docs, image_data_store):
     content.append({"type": "text", "text": "\n\nPlease answer the question based on the provided text and images."})
     return HumanMessage(content=content)
 
-# --- 4. STREAMLIT UI ---
+# --- 5. STREAMLIT UI ---
 
 if 'vector_store' not in st.session_state:
     st.session_state.vector_store = None
