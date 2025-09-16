@@ -1,6 +1,8 @@
 streamlit
 langchain
 langchain_openai
+langchain-core
+langchain-community
 langgraph
 langsmith
 python-dotenv
