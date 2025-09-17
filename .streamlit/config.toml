@@ -1,0 +1,9 @@
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[global]
+# Tell Streamlit to use a writable directory (current working dir)
+dataFrameSerialization = "arrow"
