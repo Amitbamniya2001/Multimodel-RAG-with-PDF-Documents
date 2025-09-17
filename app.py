@@ -13,7 +13,9 @@ import io
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 
-from langchain_community.vectorstores import Chroma
+# from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import DocArrayInMemorySearch
+
 from langchain.embeddings.base import Embeddings
 
 # --- 1. SET UP THE ENVIRONMENT & MODELS (RUNS ONCE) ---
@@ -135,11 +137,16 @@ def process_pdf(uploaded_file):
     texts = [d.page_content for d in all_docs]
     metadatas = [d.metadata for d in all_docs]
 
-    vector_store = Chroma.from_texts(
-        texts=texts,
-        embedding=clip_embeddings,
-        metadatas=metadatas
-    )
+    # vector_store = Chroma.from_texts(
+    #     texts=texts,
+    #     embedding=clip_embeddings,
+    #     metadatas=metadatas
+    # )
+    vector_store = DocArrayInMemorySearch.from_texts(
+    texts=texts,
+    embedding=clip_embeddings,
+    metadatas=metadatas
+    )   
     return vector_store, image_data_store
 
 # --- 4. RAG PIPELINE FUNCTIONS ---
