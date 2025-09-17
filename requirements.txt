@@ -2,7 +2,7 @@ streamlit
 langchain
 langchain_openai
 langchain-core
-langchain-community
+langchain-community>=0.2.0
 langgraph
 langsmith
 python-dotenv
@@ -14,6 +14,7 @@ transformers
 torch
 numpy
 scikit-learn
+docarray
 
 
 
